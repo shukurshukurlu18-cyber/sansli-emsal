@@ -1,0 +1,844 @@
+<!doctype html>
+<html lang="az">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Şanslı Əmsal</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,400;0,500;0,600;0,700;0,800;1,800&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: mock sportsbook header, then a "Şanslı Əmsal" banner (league wheel left, filters + coupon right), then a strip of regular site content. Single dark sportsbook look by design. */
+:root{
+  --bg:#0B1422; --surface:#111D30; --surface-2:#18273F; --line:#253956;
+  --fg:#EAF0F7; --muted:#9AA9BE; --accent:#C8F25A; --accent-ink:#0B1422;
+  --gold:#FFB547; --warn:#FF9D6B;
+  --display:"Rubik", "Trebuchet MS", Arial, sans-serif;
+  --body:"Rubik", Arial, sans-serif;
+  --mono:"JetBrains Mono", "Courier New", monospace;
+  color-scheme: dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.45}
+.wrap{max-width:1180px;margin:0 auto;padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px))}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* header */
+.site-head{background:var(--surface);border-bottom:1px solid var(--line)}
+.site-head .wrap{display:flex;align-items:center;gap:24px;padding-block:14px;flex-wrap:wrap}
+.logo{font-family:var(--display);font-weight:800;font-style:italic;font-size:20px;letter-spacing:.5px}
+.logo span{color:var(--accent)}
+.nav{display:flex;gap:18px;color:var(--muted);font-weight:500;flex-wrap:wrap}
+.nav a{color:inherit;text-decoration:none}
+.nav a.on{color:var(--fg)}
+.head-right{margin-left:auto;display:flex;align-items:center;gap:12px}
+.slip{display:flex;align-items:center;gap:8px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-weight:500}
+.slip b{background:var(--accent);color:var(--accent-ink);border-radius:999px;min-width:22px;height:22px;display:inline-grid;place-items:center;font-size:13px;padding:0 6px}
+.btn-login{background:var(--accent);color:var(--accent-ink);border:0;border-radius:10px;padding:9px 16px;font-weight:600}
+
+/* banner */
+.banner{padding-block:28px 8px}
+.panel{background:radial-gradient(120% 140% at 0% 0%, #1B3150 0%, var(--surface) 55%);border:1px solid var(--line);border-radius:22px;padding:28px;display:grid;grid-template-columns:minmax(0,400px) minmax(0,1fr);gap:36px;align-items:start}
+.eyebrow{font-size:12px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;color:var(--accent)}
+h1{font-family:var(--display);font-weight:800;font-style:italic;font-size:clamp(34px,5vw,48px);line-height:1;margin:6px 0 8px;text-wrap:balance}
+.lede{color:var(--muted);max-width:40ch;margin:0}
+
+.wheel-col{display:flex;flex-direction:column;gap:18px}
+.wheel-wrap{position:relative;width:100%;max-width:360px;aspect-ratio:1;margin:0 auto}
+.wheel-rot{position:absolute;inset:0;border-radius:50%;transition:transform 3.4s cubic-bezier(.12,.72,.12,1);box-shadow:0 0 0 8px var(--surface-2),0 0 0 9px var(--line),0 20px 60px rgba(0,0,0,.45)}
+.wheel-rot canvas{width:100%;height:100%;display:block;border-radius:50%}
+.pointer{position:absolute;left:50%;top:-14px;transform:translateX(-50%);width:0;height:0;border-left:16px solid transparent;border-right:16px solid transparent;border-top:30px solid var(--accent);filter:drop-shadow(0 3px 4px rgba(0,0,0,.5));z-index:2}
+.hub{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:30%;aspect-ratio:1;border-radius:50%;border:4px solid var(--bg);background:var(--accent);color:var(--accent-ink);font-family:var(--display);font-weight:800;font-style:italic;font-size:clamp(15px,2.8vw,21px);letter-spacing:1px;box-shadow:0 6px 18px rgba(0,0,0,.45);z-index:2;transition:transform .15s}
+.hub:hover:not(:disabled){transform:translate(-50%,-50%) scale(1.05)}
+.hub:disabled{cursor:progress;opacity:.85}
+.wheel-note{text-align:center;color:var(--muted);font-size:13px;margin:0}
+
+/* controls */
+.right{display:flex;flex-direction:column;gap:20px;min-width:0}
+.filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 20px}
+.field{display:flex;flex-direction:column;gap:8px;min-width:0}
+.field.wide{grid-column:1/-1}
+.label{font-size:12px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted)}
+.hint{color:var(--muted);font-size:13px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.chip{background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-weight:500;font-size:14px;transition:background .15s,border-color .15s}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.chip:disabled{opacity:.4;cursor:not-allowed}
+.chip.num{font-family:var(--mono);font-weight:700}
+.stepper{display:flex;align-items:center;gap:6px}
+.stepper button{width:36px;height:36px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line);font-size:18px;font-weight:600}
+.stepper button:disabled{opacity:.4;cursor:not-allowed}
+.stepper output{font-family:var(--mono);font-weight:700;font-size:18px;min-width:44px;text-align:center}
+.odds-input{width:90px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:7px 10px;color:var(--fg);font-family:var(--mono);font-size:15px}
+.odds-input:disabled{opacity:.4}
+
+/* coupon */
+.coupon{background:var(--bg);border:1px solid var(--line);border-radius:18px;overflow:hidden}
+.coupon-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;padding:16px 18px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.total-label{font-size:12px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted)}
+.total{font-family:var(--mono);font-weight:700;font-size:40px;line-height:1;color:var(--accent);font-variant-numeric:tabular-nums}
+.meta{display:flex;flex-direction:column;align-items:flex-end;gap:6px;font-size:13px;color:var(--muted);text-align:right}
+.meta .lg-name{color:var(--fg);font-weight:600;font-size:15px}
+.pill{font-size:12px;font-weight:600;border-radius:999px;padding:4px 10px;border:1px solid currentColor}
+.pill.ok{color:var(--accent)}
+.pill.low{color:var(--warn)}
+.rows{list-style:none;margin:0;padding:0}
+.row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:12px 18px;border-bottom:1px solid var(--line);animation:in .35s ease both}
+.row:last-child{border-bottom:0}
+@keyframes in{from{opacity:.2;transform:translateY(4px)}to{opacity:1;transform:none}}
+.ev{min-width:0}
+.ev .lg{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ev .tm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ev .mk{font-size:13px;color:var(--muted)}
+.odd{font-family:var(--mono);font-weight:700;font-size:18px;color:var(--accent);font-variant-numeric:tabular-nums}
+.acts{display:flex;gap:6px}
+.icon-btn{width:34px;height:34px;border-radius:9px;background:var(--surface-2);border:1px solid var(--line);display:grid;place-items:center;color:var(--muted)}
+.icon-btn:hover{color:var(--fg);border-color:var(--muted)}
+.icon-btn svg{width:16px;height:16px}
+.empty{padding:22px 18px;color:var(--muted)}
+.empty b{color:var(--accent);font-style:italic}
+.msg{margin:0;padding:12px 18px;background:rgba(255,157,107,.1);color:var(--warn);font-size:14px;border-top:1px solid var(--line)}
+.coupon-foot{display:flex;gap:10px;padding:14px 18px;border-top:1px solid var(--line)}
+.stake{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px 20px;padding:14px 18px;border-top:1px solid var(--line)}
+.stake-field{display:flex;flex-direction:column;gap:6px}
+.stake-field .odds-input{width:110px}
+.win{font-family:var(--mono);font-weight:700;font-size:22px;font-variant-numeric:tabular-nums;color:var(--fg)}
+.win.over{color:var(--warn)}
+.limits{margin-left:auto;color:var(--muted);font-size:13px;text-align:right}
+.btn{flex:1 1 150px;border-radius:12px;padding:12px 14px;font-weight:600;border:2px solid var(--accent);background:var(--accent);color:var(--accent-ink)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* rest of site */
+.below{padding-block:24px 40px}
+.below h2{font-family:var(--display);font-weight:700;font-size:20px;margin:0 0 12px}
+.list{display:grid;gap:8px}
+.match{display:grid;grid-template-columns:minmax(0,1fr) repeat(3,64px);gap:8px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+.match .tm{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.match .lg{font-size:12px;color:var(--muted)}
+.cell{background:var(--surface-2);border-radius:8px;text-align:center;padding:7px 0;font-family:var(--mono);font-weight:500;font-size:14px}
+.cell small{display:block;font-family:var(--body);color:var(--muted);font-size:11px}
+.legal{color:var(--muted);font-size:13px;margin-top:20px}
+
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom, 0px));transform:translate(-50%,20px);background:var(--accent);color:var(--accent-ink);font-weight:600;padding:12px 18px;border-radius:12px;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;max-width:calc(100% - 32px);z-index:20}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+@media (max-width:820px){
+  .panel{grid-template-columns:1fr;padding:20px;gap:24px}
+  .head-right .slip span{display:none}
+}
+@media (max-width:480px){
+  .filters{grid-template-columns:1fr}
+  .match{grid-template-columns:minmax(0,1fr) repeat(3,52px)}
+  .total{font-size:32px}
+  .nav{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  .wheel-rot{transition-duration:.6s}
+  .row{animation:none}
+}
+</style>
+<style>html,body{margin:0}body{font-family:"Rubik",Arial,sans-serif}[hidden]{display:none!important}img{max-width:100%}</style>
+</head>
+<body>
+
+
+<header class="site-head">
+  <div class="wrap">
+    <div class="logo">BRENDİ<span>NİZ</span></div>
+    <nav class="nav" aria-label="Əsas menyu">
+      <a class="on" href="#">İdman</a><a href="#">Canlı</a><a href="#">Nəticələr</a><a href="#">Promosyalar</a>
+    </nav>
+    <div class="head-right">
+      <div class="slip" aria-live="polite"><span>Kupon</span><b id="slipCount">0</b></div>
+      <button class="btn-login" type="button">Daxil ol</button>
+    </div>
+  </div>
+</header>
+
+<main>
+<section class="banner">
+  <div class="wrap">
+    <div class="panel">
+      <div class="wheel-col">
+        <div>
+          <div class="eyebrow">Yeni · Kupon generatoru</div>
+          <h1>Şanslı Əmsal</h1>
+          <p class="lede">Filtrləri seçin və çarxı fırladın. Kupon seçdiyiniz idman növlərinin oyunlarından, qarışıq şəkildə yığılır.</p>
+        </div>
+        <div class="wheel-wrap">
+          <div class="pointer" aria-hidden="true"></div>
+          <div class="wheel-rot" id="wheel"><canvas id="wheelCanvas" role="img" aria-label="İdman növləri çarxı"></canvas></div>
+          <button class="hub" id="spinBtn" type="button">SPIN</button>
+        </div>
+        <p class="wheel-note">Çarx kuponun seçimlərinə təsir etmir; kupon yalnız filtrlərə görə yığılır.</p>
+      </div>
+
+      <div class="right">
+        <div class="filters">
+          <div class="field">
+            <span class="label" id="lblCount">Oyun sayı</span>
+            <div class="stepper" role="group" aria-labelledby="lblCount">
+              <button type="button" id="minus" aria-label="Oyun sayını azalt">−</button>
+              <output id="count">4</output>
+              <button type="button" id="plus" aria-label="Oyun sayını artır">+</button>
+            </div>
+          </div>
+          <div class="field">
+            <span class="label">Ümumi əmsal</span>
+            <div class="chips" id="oddsChips"></div>
+            <span class="hint" id="oddsHint"></span>
+          </div>
+          <div class="field wide">
+            <span class="label">İdman növü</span>
+            <div class="chips" id="sportChips"></div>
+          </div>
+          <div class="field wide">
+            <span class="label">Liqa</span>
+            <div class="chips" id="leagueChips"></div>
+          </div>
+          <div class="field wide">
+            <span class="label">Market</span>
+            <div class="chips" id="marketChips"></div>
+            <span class="hint" id="marketNote" hidden>“Hər iki komanda qol vurur” yalnız futbolda var, ona görə kupona yalnız futbol oyunları düşür.</span>
+          </div>
+          <div class="field wide">
+            <span class="label">Əmsal filtri</span>
+            <div class="chips" id="bandChips"></div>
+            <span class="hint">Qarışıq + aralıq: oyunların yarısı seçilmiş aralıqda, qalanı istənilən əmsalla.</span>
+            <div class="chips" id="halfChips"></div>
+            <span class="hint" id="bandHint"></span>
+          </div>
+          <div class="field wide">
+            <span class="label">Vaxt</span>
+            <div class="chips" id="dayChips"></div>
+          </div>
+        </div>
+
+        <div class="coupon" aria-live="polite">
+          <div class="coupon-head">
+            <div>
+              <div class="total-label">Ümumi əmsal</div>
+              <div class="total" id="total">—</div>
+            </div>
+            <div class="meta">
+              <span class="lg-name" id="sportName">İdman: —</span>
+              <span id="targetText">Hədəf: 10 · 4 oyun</span>
+              <span class="pill ok" id="statusPill" hidden>Hədəfdə</span>
+            </div>
+          </div>
+          <ul class="rows" id="rows"></ul>
+          <p class="msg" id="msg" hidden></p>
+          <div class="stake">
+            <div class="stake-field">
+              <label class="label" for="stake">Məbləğ, AZN</label>
+              <input id="stake" class="odds-input" type="number" min="0.5" step="0.5" value="2">
+            </div>
+            <div class="stake-field">
+              <span class="label">Mümkün udu</span>
+              <span class="win" id="win">—</span>
+            </div>
+            <div class="limits">Maks. udu: 250 000 AZN<br>Min. məbləğ: 0.50 AZN</div>
+          </div>
+          <p class="msg" id="limitMsg" hidden></p>
+          <div class="coupon-foot">
+            <button class="btn" type="button" id="addBtn">Kupona əlavə et</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="below">
+  <div class="wrap">
+    <h2>Bu günün populyar oyunları</h2>
+    <div class="list" id="popular"></div>
+    <p class="legal">18+ · Məsuliyyətlə oynayın. Demo versiya: komandalar, oyunçular və əmsallar nümunədir, real mərc qəbul edilmir.</p>
+  </div>
+</section>
+</main>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(function(){
+  "use strict";
+  // ---------- seeded random data ----------
+  function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+  var seeded=mulberry32(20261021);
+  var r=function(a,b){return a+(b-a)*seeded()};
+  var round2=function(x){return Math.round(x*100)/100};
+  var odd=function(p){return Math.max(1.01,round2(1/(Math.min(p,.95)*1.06)))};
+  var half=function(a,b){return (Math.round(r(a,b))+.5)};
+
+  // markets per sport: [label, odds, type]; type is one of result / total / btts
+  function threeWay(ph,pd,pa){
+    return [["Qələbə 1",odd(ph),"result"],["Heç-heçə",odd(pd),"result"],["Qələbə 2",odd(pa),"result"],
+      ["İkili şans 1X",odd(ph+pd),"result"],["İkili şans X2",odd(pd+pa),"result"]];
+  }
+  function twoWay(p){return [["Qələbə 1",odd(p),"result"],["Qələbə 2",odd(1-p),"result"]]}
+  function overUnder(line,unit,p){return [["Üst "+line+" "+unit,odd(p),"total"],["Alt "+line+" "+unit,odd(1-p),"total"]]}
+
+  var SPORTS=[
+    {name:"Futbol",lines:["Soccer"],icon:"football",suffix:" FK",leagues:{
+      "Çempionlar Liqası":["Madrid","Barselona","Münhen","Paris","Milan","Liverpul","Mançester","Dortmund","Lissabon","Porto","Amsterdam","İstanbul"],
+      "Premyer Liqa (İngiltərə)":["London","Mançester","Liverpul","Birminhem","Lids","Nyukasl","Brayton","Notingem","Lester","Bristol","Şeffild","Norviç"],
+      "La Liqa":["Madrid","Barselona","Sevilya","Valensiya","Bilbao","Malaqa","Vilyarreal","Saraqosa","Qranada","Kadis","Vitoriya","Mayorka"],
+      "Bundesliqa":["Münhen","Dortmund","Leypsiq","Leverkuzen","Frankfurt","Ştutqart","Volfsburq","Bremen","Freyburq","Hamburq","Köln","Berlin"],
+      "Azərbaycan Premyer Liqası":["Bakı","Gəncə","Sumqayıt","Şəki","Lənkəran","Quba","Şamaxı","Mingəçevir","Naxçıvan","Qəbələ","Şirvan","Zaqatala"]},
+      markets:function(){
+        var ph=r(.15,.78),pd=r(.16,.28),pa=Math.max(.06,1-ph-pd),po=r(.4,.65),p15=r(.68,.84),pb=r(.42,.62);
+        return threeWay(ph,pd,pa).concat([["Üst 1.5 qol",odd(p15),"total"]],overUnder("2.5","qol",po),
+          [["Hər iki komanda qol vurur: Bəli",odd(pb),"btts"],["Hər iki komanda qol vurur: Xeyr",odd(1-pb),"btts"]]);
+      }},
+    {name:"Basketbol",lines:["Basketball"],icon:"basketball",suffix:"",leagues:{
+      "Avroliqa":["Madrid","Barselona","İstanbul","Afina","Pirey","Belqrad","Kaunas","Milan","Münhen","Valensiya","Paris","Monako"],
+      "NBA":["Boston","Çikaqo","Dallas","Denver","Mayami","Feniks","Atlanta","Detroyt","Hyuston","Memfis","Yuta","Orlando"]},
+      markets:function(){return twoWay(r(.15,.86)).concat(overUnder(half(155,232),"xal",r(.45,.55)))}},
+    {name:"Tennis",lines:["Tennis"],icon:"tennis",suffix:"",leagues:{
+      "ATP":["A. Novak","L. Rossi","M. Kovaç","D. Martinez","T. Müller","R. Səfərov","K. Tanaka","J. Silva","P. Dubois","S. Andersen","F. Romero","B. Kowalski"],
+      "WTA":["E. Petrova","S. Garcia","N. Kim","A. Həsənova","L. Moreau","I. Varga","M. Costa","H. Berg","C. Rivera","Y. Mori","D. Popescu","O. Lind"]},
+      markets:function(){return twoWay(r(.15,.86)).concat(overUnder(half(19,23),"gem",r(.42,.58)))}},
+    {name:"Buz xokkeyi",lines:["Ice","Hockey"],icon:"hockey",suffix:"",leagues:{
+      "NHL":["Toronto","Monreal","Boston","Çikaqo","Edmonton","Kalqari","Vankuver","Ottava","Dallas","Denver","Detroyt","Pitsburq"],
+      "Avropa Xokkey Liqası":["Stokholm","Helsinki","Praqa","Bern","Sürix","Vyana","Berlin","Münhen","Oslo","Kopenhagen","Bratislava","Budapeşt"]},
+      markets:function(){var ph=r(.2,.62),pd=r(.18,.24);return threeWay(ph,pd,Math.max(.08,1-ph-pd)).concat(overUnder("5.5","qol",r(.42,.58)))}},
+    {name:"Stolüstü tennis",lines:["Table","Tennis"],icon:"tabletennis",suffix:"",leagues:{
+      "Pro Liqa":["K. Çen","M. Sato","D. Orlov","E. Novak","P. Silva","J. Kim","R. Quliyev","L. Fischer","A. Rossi","S. Park","V. Ivanov","T. Berg"]},
+      markets:function(){return twoWay(r(.15,.86)).concat(overUnder(half(70,78),"xal",r(.44,.56)))}},
+    {name:"Voleybol",lines:["Volleyball"],icon:"volleyball",suffix:"",leagues:{
+      "Superliqa":["Bakı","Gəncə","Naxçıvan","Sumqayıt","Şirvan","Xırdalan","Lənkəran","Şəki","Quba","Mingəçevir","Qəbələ","Şamaxı"]},
+      markets:function(){return twoWay(r(.15,.86)).concat(overUnder("3.5","set",r(.42,.58)))}},
+    {name:"Həndbol",lines:["Handball"],icon:"handball",suffix:"",leagues:{
+      "Çempionlar Liqası":["Kil","Barselona","Vesprem","Paris","Seged","Flensburq","Kelse","Aalborq","Berlin","Maqdeburq","Nant","Portu"]},
+      markets:function(){var ph=r(.15,.8),pd=r(.06,.1);return threeWay(ph,pd,Math.max(.06,1-ph-pd)).concat(overUnder(half(52,60),"qol",r(.44,.56)))}},
+    {name:"Beysbol",lines:["Baseball"],icon:"baseball",suffix:"",leagues:{
+      "MLB":["Nyu-York","Boston","Çikaqo","Los-Anceles","San-Fransisko","Hyuston","Atlanta","Toronto","Seattl","Filadelfiya","San-Dieqo","Detroyt"]},
+      markets:function(){return twoWay(r(.25,.75)).concat(overUnder(half(7,9),"run",r(.44,.56)))}}
+  ];
+  var DAYS=["Bu gün","Sabah"];
+  var events=[]; var id=0;
+  SPORTS.forEach(function(S){
+    Object.keys(S.leagues).forEach(function(league){
+      DAYS.forEach(function(day){
+        var teams=S.leagues[league].slice().sort(function(){return seeded()-.5});
+        for(var i=0;i+1<teams.length;i+=2){
+          var hour=12+Math.floor(seeded()*11), min=seeded()<.5?"00":"30";
+          events.push({id:id++,sport:S.name,league:league,day:day,time:hour+":"+min,
+            home:teams[i]+S.suffix,away:teams[i+1]+S.suffix,markets:S.markets()});
+        }
+      });
+    });
+  });
+
+  // ---------- state ----------
+  var PRESETS=[3,5,10,20,50];
+  var MARKETS=[["result","1X2 və İkili şans"],["total","Total (Üst/Alt)"],["btts","Hər iki komanda qol vurur"]];
+  var MAX_ODD=6.5, TOL=0.03;
+  // per-selection odds bands: [key, label, upper bound inclusive]
+  var BANDS=[["b1","x ≤ 1.20",1.20],["b2","1.20 – 1.50",1.50],["b3","1.50 – 2.00",2.00],["b4","2.00 – 3.00",3.00],["b5","x > 3.00",Infinity]];
+  function bandOf(x){for(var i=0;i<BANDS.length;i++){if(x<=BANDS[i][2]+1e-9)return BANDS[i][0]}return BANDS[BANDS.length-1][0]}
+  // payout limit: stake × total odds may not exceed MAX_WIN; with the minimum stake that allows total odds up to MAX_WIN / MIN_STAKE
+  var MAX_WIN=250000, MIN_STAKE=0.5, MAX_TOTAL=MAX_WIN/MIN_STAKE;
+  function money(x){return x.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g," ")}
+  var N=SPORTS.length, SEG=360/N;
+  var state={count:4,target:10,manual:false,sports:new Set(SPORTS.map(function(s){return s.name})),leagues:new Set(),
+    markets:new Set(MARKETS.map(function(m){return m[0]})),bands:new Set(BANDS.map(function(b){return b[0]})),half:null,days:new Set(DAYS),
+    current:null,coupon:[],rotation:0,spinning:false,spun:false,slip:0};
+  var $=function(s){return document.getElementById(s)};
+
+  function leaguesActive(){return state.sports.size<=2}
+  function usable(e){return e.markets.filter(function(m){return state.markets.has(m[2])&&state.bands.has(bandOf(m[1]))&&m[1]<=MAX_ODD})}
+  // the coupon is built from every sport chosen in the filter; the wheel is decoration only
+  function pool(){
+    var useL=leaguesActive()&&state.leagues.size>0;
+    return events.filter(function(e){return state.sports.has(e.sport)&&state.days.has(e.day)&&(!useL||state.leagues.has(e.league))&&usable(e).length});
+  }
+  // real reachable range: product of the n lowest (or highest) odds from n different events in the pool
+  // "Qarışıq + aralıq" mode: at least half of the selections (rounded up) must come from the chosen band
+  function halfNeed(n){return state.half?Math.ceil(n/2):0}
+  function inHalf(odds){return bandOf(odds)===state.half}
+  function halfOdds(e){return usable(e).filter(function(m){return inHalf(m[1])}).map(function(m){return m[1]})}
+  function range(n){
+    var evs=pool(); if(evs.length<n) return null;
+    var k=halfNeed(n);
+    function side(isLow){
+      var pickF=isLow?Math.min:Math.max, cmp=isLow?function(a,b){return a.v-b.v}:function(a,b){return b.v-a.v};
+      var used=new Set(), prod=1;
+      if(k){
+        var hs=evs.filter(function(e){return halfOdds(e).length}).map(function(e){return {id:e.id,v:pickF.apply(null,halfOdds(e))}}).sort(cmp);
+        if(hs.length<k) return null;
+        for(var i=0;i<k;i++){prod*=hs[i].v;used.add(hs[i].id)}
+      }
+      var rest=evs.filter(function(e){return !used.has(e.id)}).map(function(e){return {v:pickF.apply(null,usable(e).map(function(m){return m[1]}))}}).sort(cmp);
+      if(rest.length<n-k) return null;
+      for(var j=0;j<n-k;j++) prod*=rest[j].v;
+      return prod;
+    }
+    var lo=side(true), hi=side(false);
+    return lo===null||hi===null?null:{lo:lo,hi:hi};
+  }
+  function minOdds(n){var rr=range(n);if(!rr)return null;return Math.ceil(rr.lo*100)/100}
+  function maxOdds(n){var rr=range(n);if(!rr)return null;return Math.min(MAX_TOTAL,Math.floor(rr.hi*100)/100)}
+  function targetOk(){var lo=minOdds(state.count),hi=maxOdds(state.count);return lo!==null&&state.target>=lo&&state.target<=hi}
+  // keeps the target inside what is really possible with the current filters; never invents another value
+  function normalizeTarget(){
+    var lo=minOdds(state.count), hi=maxOdds(state.count);
+    if(lo===null) return "none";
+    if(state.target<lo){state.target=lo;state.manual=true;return "lo"}
+    if(state.target>hi){state.target=hi;state.manual=true;return "hi"}
+    return "";
+  }
+  function segmentOk(){return true}
+  function shuffle(a){a=a.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t}return a}
+  function pick(ev,m){return {ev:ev,market:m[0],odds:m[1]}}
+  function totalOf(c){return c.reduce(function(p,x){return p*x.odds},1)}
+  function fmt(x){return (Math.round(x*100)/100).toString()}
+
+  // generator: every slot aims at the per-event odds still needed (remaining target ^ 1/slots left),
+  // picking at random among the closest options; the last slot must land the total within ±TOL.
+  // Sport balance: each slot first picks a sport at random (equal chance per selected sport, not per event),
+  // and while some selected sport is still missing, the slot goes to a missing one. Football has far more
+  // events and markets, so without this it would win almost every slot.
+  // Phases: 0 = all selected sports covered, 1 = balanced but coverage relaxed, 2 = pure closeness (last resort).
+  function generate(target,n,evs){
+    if(evs.length<n) return null;
+    var hk=halfNeed(n);
+    var allSports=[]; evs.forEach(function(e){if(allSports.indexOf(e.sport)<0)allSports.push(e.sport)});
+    var wantSports=Math.min(n,allSports.length);
+    function bySport(list,sp){return list.filter(function(c){return c.ev.sport===sp})}
+    function sportsIn(list){var s=[];list.forEach(function(c){if(s.indexOf(c.ev.sport)<0)s.push(c.ev.sport)});return s}
+    for(var attempt=0;attempt<2400;attempt++){
+      var phase=attempt<1500?0:attempt<2300?1:2, greedy=attempt===2300;
+      var used=new Set(), usedSports=[], chosen=[], need=target, ok=true;
+      for(var slot=0;slot<n;slot++){
+        var k=n-slot, cand=[], must=slot<hk;   // the band-restricted slots come first, the last slot stays free
+        evs.forEach(function(e){ if(!used.has(e.id)) usable(e).forEach(function(m){ if(!must||inHalf(m[1])) cand.push(pick(e,m)) }) });
+        if(!cand.length){ok=false;break}
+        var missing=sportsIn(cand).filter(function(s){return usedSports.indexOf(s)<0});
+        var stillNeeded=wantSports-usedSports.length;
+        var choice;
+        if(k===1){
+          var hits=cand.filter(function(c){return Math.abs(c.odds-need)/need<=TOL});
+          if(phase===0&&stillNeeded>0) hits=hits.filter(function(c){return usedSports.indexOf(c.ev.sport)<0});
+          if(!hits.length){ok=false;break}
+          if(phase<2){var hs=sportsIn(hits);hits=bySport(hits,hs[Math.floor(Math.random()*hs.length)])}
+          hits.sort(function(a,b){return Math.abs(a.odds-need)-Math.abs(b.odds-need)});
+          choice=greedy?hits[0]:hits[Math.floor(Math.random()*Math.min(hits.length,4))];
+        } else {
+          if(phase<2){
+            var pickFrom=(phase===0&&stillNeeded>0&&missing.length)?missing:sportsIn(cand);
+            cand=bySport(cand,pickFrom[Math.floor(Math.random()*pickFrom.length)]);
+          }
+          var g=Math.pow(need,1/k);
+          cand.sort(function(a,b){return Math.abs(Math.log(a.odds/g))-Math.abs(Math.log(b.odds/g))});
+          choice=greedy?cand[0]:cand[Math.floor(Math.random()*Math.min(cand.length,6))];
+        }
+        chosen.push(choice); used.add(choice.ev.id); need/=choice.odds;
+        if(usedSports.indexOf(choice.ev.sport)<0) usedSports.push(choice.ev.sport);
+      }
+      if(ok&&Math.abs(totalOf(chosen)-target)/target<=TOL&&chosen.filter(function(c){return !hk||inHalf(c.odds)}).length>=hk) return shuffle(chosen);
+    }
+    return null;
+  }
+
+  // ---------- coupon rendering ----------
+  var shownTotal=0;
+  function animateTotal(to){
+    var el=$("total"), from=shownTotal, t0=performance.now(), dur=matchMedia("(prefers-reduced-motion: reduce)").matches?0:500;
+    shownTotal=to;
+    if(!dur||!to){el.textContent=to?to.toFixed(2):"—";return}
+    (function step(now){var k=Math.min(1,(now-t0)/dur);var v=from+(to-from)*(1-Math.pow(1-k,3));el.textContent=v.toFixed(2);if(k<1)requestAnimationFrame(step)})(t0);
+  }
+  var ICON_SWAP='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h13l-3-3"/><path d="M20 17H7l3 3"/></svg>';
+  var ICON_X='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+
+  function renderMeta(){
+    var t="Hədəf: "+fmt(state.target)+" · "+(state.coupon.length||state.count)+" oyun";
+    if(state.half&&state.coupon.length){
+      var hb=BANDS.filter(function(b){return b[0]===state.half})[0];
+      t+=" · "+hb[1]+": "+state.coupon.filter(function(s){return inHalf(s.odds)}).length+"/"+state.coupon.length;
+    }
+    $("targetText").textContent=t;
+    var names=[]; state.coupon.forEach(function(s){if(names.indexOf(s.ev.sport)<0)names.push(s.ev.sport)});
+    $("sportName").textContent="İdman: "+(names.length?names.join(", "):"—");
+  }
+  function renderCoupon(msg){
+    var rows=$("rows"); rows.innerHTML="";
+    if(!state.coupon.length){
+      var li=document.createElement("li"); li.className="empty";
+      if(!state.spun) li.innerHTML="Filtrləri seçin və çarxın ortasındakı <b>SPIN</b> düyməsini basın. Kupon seçdiyiniz filtrlərə uyğun burada yaranacaq.";
+      else li.textContent=msg?"Kupon yaradılmadı.":"Kupon boşdur. Yeni kupon üçün RESPIN basın.";
+      rows.appendChild(li);
+    }
+    state.coupon.forEach(function(s,i){
+      var li=document.createElement("li"); li.className="row";
+      li.innerHTML='<div class="ev"><div class="lg"></div><div class="tm"></div><div class="mk"></div></div><div class="odd"></div>'+
+        '<div class="acts"><button class="icon-btn" type="button" data-swap="'+i+'">'+ICON_SWAP+'</button><button class="icon-btn" type="button" data-del="'+i+'">'+ICON_X+'</button></div>';
+      li.querySelector(".lg").textContent=s.ev.sport+" · "+s.ev.league+" · "+s.ev.day+" "+s.ev.time;
+      li.querySelector(".tm").textContent=s.ev.home+" – "+s.ev.away;
+      li.querySelector(".mk").textContent=s.market;
+      li.querySelector(".odd").textContent=s.odds.toFixed(2);
+      li.querySelector("[data-swap]").setAttribute("aria-label","Oyunu dəyiş: "+s.ev.home+" – "+s.ev.away);
+      li.querySelector("[data-del]").setAttribute("aria-label","Oyunu çıxar: "+s.ev.home+" – "+s.ev.away);
+      rows.appendChild(li);
+    });
+    var tot=state.coupon.length?totalOf(state.coupon):0;
+    animateTotal(tot); renderMeta();
+    var pill=$("statusPill");
+    if(!state.coupon.length){pill.hidden=true}
+    else{
+      pill.hidden=false;
+      var err=(tot-state.target)/state.target;
+      if(Math.abs(err)<=TOL){pill.className="pill ok";pill.textContent="Hədəfdə"}
+      else if(err<0){pill.className="pill low";pill.textContent="Hədəfdən aşağı"}
+      else{pill.className="pill low";pill.textContent="Hədəfdən yuxarı"}
+    }
+    var m=$("msg"); if(msg){m.textContent=msg;m.hidden=false}else{m.hidden=true}
+    renderStake();
+  }
+
+  function renderStake(){
+    var stake=parseFloat($("stake").value), tot=state.coupon.length?totalOf(state.coupon):0;
+    var win=$("win"), msg=$("limitMsg"), problem="";
+    if(!tot){win.textContent="—";win.className="win"}
+    else if(!isFinite(stake)||stake<MIN_STAKE){
+      win.textContent="—"; win.className="win";
+      problem="Minimum məbləğ 0.50 AZN-dir.";
+    } else {
+      var w=stake*tot; win.textContent=money(w)+" AZN";
+      var over=w>MAX_WIN; win.className="win"+(over?" over":"");
+      if(over){
+        var maxStake=Math.floor(MAX_WIN/tot*100)/100;
+        problem="Mümkün udu 250 000 AZN limitini keçir. Bu kupon üçün məbləği ən çox "+money(maxStake)+" AZN edin.";
+      }
+    }
+    msg.textContent=problem; msg.hidden=!problem;
+    $("addBtn").disabled=!tot||!!problem;
+  }
+  $("stake").addEventListener("input",renderStake);
+
+  function swap(i){
+    var old=state.coupon[i], used=new Set(state.coupon.map(function(s){return s.ev.id}));
+    var cur=totalOf(state.coupon), inBand=Math.abs(cur-state.target)/state.target<=TOL;
+    var evs=shuffle(pool().filter(function(e){return !used.has(e.id)})), cands=[], closest=null, cErr=Infinity;
+    var othersIn=state.coupon.filter(function(s,j){return j!==i&&inHalf(s.odds)}).length;
+    var mustHalf=!!state.half&&othersIn<halfNeed(state.coupon.length);
+    evs.forEach(function(e){usable(e).forEach(function(m){
+      if(mustHalf&&!inHalf(m[1])) return;
+      var err=Math.abs(m[1]-old.odds)/old.odds;
+      var keeps=inBand?Math.abs(cur/old.odds*m[1]-state.target)/state.target<=TOL:err<=0.06;
+      if(keeps) cands.push(pick(e,m));
+      if(err<cErr){cErr=err;closest=pick(e,m)}
+    })});
+    var next=cands.length?cands[Math.floor(Math.random()*cands.length)]:(inBand?null:closest);
+    if(!next){toast("Hədəf əmsalı saxlayan başqa oyun yoxdur.");return}
+    state.coupon[i]=next; renderCoupon("");
+  }
+  $("rows").addEventListener("click",function(e){
+    var b=e.target.closest("button"); if(!b) return;
+    if(b.hasAttribute("data-swap")) swap(+b.getAttribute("data-swap"));
+    if(b.hasAttribute("data-del")){state.coupon.splice(+b.getAttribute("data-del"),1);renderCoupon("")}
+  });
+
+  // ---------- sport icons (original line drawings, centred at 0,0, box size s) ----------
+  function circle(ctx,x,y,rad){ctx.beginPath();ctx.arc(x,y,rad,0,Math.PI*2)}
+  var ICONS={
+    football:function(ctx,s){
+      var rd=s/2; circle(ctx,0,0,rd); ctx.stroke();
+      ctx.beginPath();
+      for(var i=0;i<5;i++){var a=-Math.PI/2+i*2*Math.PI/5,x=Math.cos(a)*rd*.38,y=Math.sin(a)*rd*.38;i?ctx.lineTo(x,y):ctx.moveTo(x,y)}
+      ctx.closePath(); ctx.fill();
+      for(var j=0;j<5;j++){var b=-Math.PI/2+j*2*Math.PI/5;ctx.beginPath();ctx.moveTo(Math.cos(b)*rd*.38,Math.sin(b)*rd*.38);ctx.lineTo(Math.cos(b)*rd,Math.sin(b)*rd);ctx.stroke()}
+    },
+    basketball:function(ctx,s){
+      var rd=s/2; circle(ctx,0,0,rd); ctx.stroke();
+      ctx.save(); circle(ctx,0,0,rd); ctx.clip();
+      ctx.beginPath(); ctx.moveTo(0,-rd); ctx.lineTo(0,rd); ctx.moveTo(-rd,0); ctx.lineTo(rd,0); ctx.stroke();
+      circle(ctx,-rd*1.25,0,rd*.95); ctx.stroke(); circle(ctx,rd*1.25,0,rd*.95); ctx.stroke();
+      ctx.restore();
+    },
+    tennis:function(ctx,s){
+      var rd=s/2; circle(ctx,0,0,rd); ctx.stroke();
+      ctx.save(); circle(ctx,0,0,rd); ctx.clip();
+      circle(ctx,-rd*1.35,0,rd*.95); ctx.stroke(); circle(ctx,rd*1.35,0,rd*.95); ctx.stroke();
+      ctx.restore();
+    },
+    hockey:function(ctx,s){
+      ctx.beginPath(); ctx.moveTo(-s*.32,-s*.5); ctx.lineTo(s*.12,s*.3); ctx.quadraticCurveTo(s*.2,s*.42,s*.5,s*.4); ctx.stroke();
+      ctx.beginPath(); ctx.ellipse(-s*.22,s*.36,s*.2,s*.08,0,0,Math.PI*2); ctx.fill();
+    },
+    tabletennis:function(ctx,s){
+      circle(ctx,-s*.08,-s*.08,s*.3); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(s*.13,s*.13); ctx.lineTo(s*.42,s*.42); ctx.lineWidth*=1.8; ctx.stroke(); ctx.lineWidth/=1.8;
+      circle(ctx,s*.36,-s*.34,s*.1); ctx.fill();
+    },
+    volleyball:function(ctx,s){
+      var rd=s/2; circle(ctx,0,0,rd); ctx.stroke();
+      ctx.save(); circle(ctx,0,0,rd); ctx.clip();
+      for(var i=0;i<3;i++){var a=-Math.PI/2+i*2*Math.PI/3;circle(ctx,Math.cos(a)*rd*1.05,Math.sin(a)*rd*1.05,rd*.95);ctx.stroke()}
+      ctx.restore();
+    },
+    handball:function(ctx,s){
+      var rd=s/2; circle(ctx,0,0,rd); ctx.stroke();
+      ctx.save(); circle(ctx,0,0,rd); ctx.clip();
+      ctx.beginPath(); ctx.moveTo(-rd,-rd*.15); ctx.bezierCurveTo(-rd*.3,-rd*.7,rd*.3,rd*.7,rd,rd*.15); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-rd*.2,-rd); ctx.bezierCurveTo(-rd*.6,-rd*.2,-rd*.6,rd*.3,-rd*.25,rd); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(rd*.2,-rd); ctx.bezierCurveTo(rd*.6,-rd*.3,rd*.6,rd*.2,rd*.25,rd); ctx.stroke();
+      ctx.restore();
+    },
+    baseball:function(ctx,s){
+      var rd=s/2; circle(ctx,0,0,rd); ctx.stroke();
+      [-1,1].forEach(function(side){
+        var cx=side*rd*1.3, cr=rd*.95;
+        ctx.save(); circle(ctx,0,0,rd); ctx.clip(); circle(ctx,cx,0,cr); ctx.stroke(); ctx.restore();
+        for(var k=-2;k<=2;k++){
+          var a=(side>0?Math.PI:0)+k*0.28, px=cx+Math.cos(a)*cr, py=Math.sin(a)*cr, nx=Math.cos(a), ny=Math.sin(a);
+          ctx.beginPath(); ctx.moveTo(px-ny*rd*.12-nx*rd*.06,py+nx*rd*.12-ny*rd*.06); ctx.lineTo(px+ny*rd*.12-nx*rd*.06,py-nx*rd*.12-ny*rd*.06); ctx.stroke();
+        }
+      });
+    }
+  };
+
+  // ---------- wheel ----------
+  var canvas=$("wheelCanvas"), wheelEl=$("wheel");
+  function drawWheel(){
+    var size=canvas.clientWidth||360, dpr=window.devicePixelRatio||1;
+    canvas.width=size*dpr; canvas.height=size*dpr;
+    var ctx=canvas.getContext("2d"); ctx.setTransform(dpr,0,0,dpr,0,0);
+    var R=size/2, seg=Math.PI*2/N;
+    ctx.clearRect(0,0,size,size);
+    SPORTS.forEach(function(S,i){
+      var a0=-Math.PI/2+i*seg, a1=a0+seg, mid=a0+seg/2, ok=segmentOk(i);
+      ctx.beginPath(); ctx.moveTo(R,R); ctx.arc(R,R,R,a0,a1); ctx.closePath();
+      var g=ctx.createRadialGradient(R,R,R*.2,R,R,R);
+      g.addColorStop(0,i%2?"#1A2C4A":"#122139"); g.addColorStop(1,i%2?"#24406A":"#1A3050");
+      ctx.fillStyle=g; ctx.globalAlpha=ok?1:.35; ctx.fill(); ctx.globalAlpha=1;
+      ctx.strokeStyle="#0B1422"; ctx.lineWidth=2; ctx.stroke();
+
+      // icon, upright towards the rim
+      ctx.save(); ctx.translate(R,R); ctx.rotate(mid); ctx.translate(R*.52,0); ctx.rotate(Math.PI/2);
+      var is=R*.2; ctx.strokeStyle=ok?"#C8F25A":"#4E5E73"; ctx.fillStyle=ctx.strokeStyle;
+      ctx.lineWidth=Math.max(1.6,is*.08); ctx.lineCap="round"; ctx.lineJoin="round";
+      ICONS[S.icon](ctx,is);
+      ctx.restore();
+
+      // label along the rim
+      ctx.save(); ctx.translate(R,R); ctx.rotate(mid); ctx.translate(R*.8,0); ctx.rotate(Math.PI/2);
+      var fs=size*.04, avail=R*.5;
+      ctx.font="700 "+fs+"px Rubik, Arial, sans-serif";
+      var w=Math.max.apply(null,S.lines.map(function(t){return ctx.measureText(t).width}));
+      if(w>avail){fs*=avail/w;ctx.font="700 "+fs+"px Rubik, Arial, sans-serif"}
+      ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillStyle=ok?"#EAF0F7":"#5D6C80";
+      var lh=fs*1.12, y0=-(S.lines.length-1)*lh/2;
+      S.lines.forEach(function(t,k){ctx.fillText(t,0,y0+k*lh)});
+      ctx.restore();
+    });
+    for(var d=0; d<N*2; d++){
+      var ang=-Math.PI/2+d*(seg/2);
+      circle(ctx,R+Math.cos(ang)*(R-7),R+Math.sin(ang)*(R-7),2.6);
+      ctx.fillStyle=d%2?"#C8F25A":"#EAF0F7"; ctx.fill();
+    }
+    canvas.setAttribute("aria-label","Dekorativ çarx: "+SPORTS.map(function(S){return S.name}).join(", "));
+  }
+  function setRotation(deg,instant){
+    if(instant) wheelEl.style.transition="none";
+    wheelEl.style.transform="rotate("+deg+"deg)";
+    if(instant){wheelEl.getBoundingClientRect();wheelEl.style.transition=""}
+    state.rotation=deg;
+  }
+  function rotationToShow(i,current,jitter){
+    var theta=i*SEG+SEG/2+jitter, want=((360-theta)%360+360)%360, cur=((current%360)+360)%360;
+    return current+5*360+((want-cur)+360)%360;
+  }
+
+  function spin(){
+    if(state.spinning) return;
+    if(!targetOk()){toast(state.count+" oyunla "+fmt(state.target)+" əmsal mümkün deyil. Oyun sayını və ya əmsalı dəyişin.");return}
+    // build the coupon from all filtered sports first; the wheel then stops on a random segment, purely for show
+    var coupon=generate(state.target,state.count,pool()), idx=Math.floor(Math.random()*N);
+    if(!coupon){toast(fmt(state.target)+" əmsal üçün dəqiq kupon tapılmadı. Əmsalı bir az dəyişin.");return}
+    var jitter=(Math.random()-.5)*SEG*0.6;
+    state.spinning=true; $("spinBtn").disabled=true;
+    setRotation(rotationToShow(idx,state.rotation,jitter));
+    var finished=false, fallback;
+    var done=function(){
+      if(finished) return; finished=true;
+      wheelEl.removeEventListener("transitionend",done); clearTimeout(fallback);
+      state.spinning=false; state.spun=true;
+      $("spinBtn").textContent="RESPIN"; renderSpin();
+      state.coupon=coupon;
+      var poolSports=[]; pool().forEach(function(e){if(poolSports.indexOf(e.sport)<0)poolSports.push(e.sport)});
+      var inCoupon=[]; coupon.forEach(function(c){if(inCoupon.indexOf(c.ev.sport)<0)inCoupon.push(c.ev.sport)});
+      var lacking=poolSports.filter(function(s){return inCoupon.indexOf(s)<0});
+      renderCoupon(inCoupon.length<Math.min(state.count,poolSports.length)
+        ?"Bu hədəf əmsalla "+lacking.join(", ")+" üçün uyğun oyun tapılmadı. Əmsalı və ya filtrləri dəyişsəniz, kupona düşə bilər."
+        :"");
+      toast("Kupon hazırdır: "+state.count+" oyun, əmsal "+totalOf(coupon).toFixed(2));
+    };
+    fallback=setTimeout(done,3800);
+    wheelEl.addEventListener("transitionend",done);
+  }
+  $("spinBtn").addEventListener("click",spin);
+
+  // ---------- filters ----------
+  function chip(label,pressed,onClick,disabled,cls){
+    var b=document.createElement("button"); b.type="button"; b.className="chip"+(cls?" "+cls:""); b.textContent=label;
+    b.setAttribute("aria-pressed",pressed?"true":"false"); if(disabled) b.disabled=true;
+    b.addEventListener("click",onClick); return b;
+  }
+  function renderOdds(){
+    var box=$("oddsChips"); box.innerHTML="";
+    var lo=minOdds(state.count), hi=maxOdds(state.count);
+    if(lo===null){
+      $("oddsHint").textContent="Bu filtrlərlə "+state.count+" oyunluq kupon qurmaq mümkün deyil. Oyun sayını azaldın və ya filtrləri genişləndirin.";
+      PRESETS.forEach(function(v){box.appendChild(chip(String(v),false,function(){},true,"num"))});
+      return;
+    }
+    PRESETS.forEach(function(v){
+      box.appendChild(chip(String(v),!state.manual&&state.target===v,function(){state.manual=false;state.target=v;changed()},v<lo||v>hi,"num"));
+    });
+    box.appendChild(chip("Özüm",state.manual,function(){
+      state.manual=true; if(state.target<lo) state.target=lo; changed(); $("oddsInput").focus();
+    }));
+    var inp=document.createElement("input");
+    inp.id="oddsInput"; inp.className="odds-input"; inp.type="number"; inp.min=String(lo); inp.max=String(hi); inp.step="0.01";
+    inp.value=state.target; inp.disabled=!state.manual; inp.setAttribute("aria-label","İstədiyiniz ümumi əmsal, minimum "+lo);
+    inp.addEventListener("change",function(){
+      var v=parseFloat(inp.value);
+      if(!isFinite(v)||v<lo){v=lo;toast(state.count+" oyun üçün mümkün minimum əmsal: "+lo.toFixed(2))}
+      else if(v>hi){v=hi;toast(state.count+" oyun üçün mümkün maksimum əmsal: "+money(hi)+(hi>=MAX_TOTAL?" (0.50 AZN mərclə 250 000 AZN udu limiti)":""))}
+      v=Math.round(v*100)/100; inp.value=v; state.target=v; renderMeta(); drawWheel(); renderSpin();
+    });
+    box.appendChild(inp);
+    $("oddsHint").textContent=state.count+" oyun üçün mümkün aralıq: "+money(lo)+" – "+money(hi);
+  }
+  function renderSports(){
+    var box=$("sportChips"); box.innerHTML="";
+    var all=state.sports.size===N;
+    box.appendChild(chip("Hamısı",all,function(){SPORTS.forEach(function(S){state.sports.add(S.name)});state.leagues=new Set();changed()}));
+    SPORTS.forEach(function(S){
+      box.appendChild(chip(S.name,!all&&state.sports.has(S.name),function(){
+        if(all){state.sports=new Set([S.name])}
+        else if(state.sports.has(S.name)){ if(state.sports.size>1) state.sports.delete(S.name) }
+        else state.sports.add(S.name);
+        state.leagues=new Set(); changed();
+      }));
+    });
+  }
+  function renderLeagues(){
+    var box=$("leagueChips"); box.innerHTML="";
+    if(!leaguesActive()){
+      var p=document.createElement("span"); p.className="hint";
+      p.textContent="Liqa seçimi yalnız 1–2 idman növü seçiləndə açılır."; box.appendChild(p); return;
+    }
+    var list=[]; SPORTS.forEach(function(S){if(state.sports.has(S.name))Object.keys(S.leagues).forEach(function(l){list.push(l)})});
+    var none=state.leagues.size===0;
+    box.appendChild(chip("Hamısı",none,function(){state.leagues=new Set();changed()}));
+    list.forEach(function(l){
+      box.appendChild(chip(l,state.leagues.has(l),function(){
+        if(state.leagues.has(l)) state.leagues.delete(l); else state.leagues.add(l);
+        if(state.leagues.size===list.length) state.leagues=new Set();
+        changed();
+      }));
+    });
+  }
+  function renderBands(){
+    var box=$("bandChips"); box.innerHTML="";
+    var all=state.bands.size===BANDS.length;
+    var everyBand=function(){return new Set(BANDS.map(function(b){return b[0]}))};
+    box.appendChild(chip("Qarışıq",all&&!state.half,function(){state.bands=everyBand();state.half=null;changed()}));
+    BANDS.forEach(function(b){
+      box.appendChild(chip(b[1],!all&&!state.half&&state.bands.has(b[0]),function(){
+        if(all||state.half){state.bands=new Set([b[0]])}
+        else if(state.bands.has(b[0])){ if(state.bands.size>1) state.bands.delete(b[0]) }
+        else state.bands.add(b[0]);
+        state.half=null; changed();
+      },false,"num"));
+    });
+    var hbox=$("halfChips"); hbox.innerHTML="";
+    BANDS.forEach(function(b){
+      hbox.appendChild(chip("Qarışıq + "+b[1],state.half===b[0],function(){
+        state.bands=everyBand(); state.half=state.half===b[0]?null:b[0]; changed();
+      },false,"num"));
+    });
+    var hint=$("bandHint");
+    if(state.half){
+      var hb=BANDS.filter(function(b){return b[0]===state.half})[0], k=halfNeed(state.count);
+      hint.textContent=state.count+" oyundan ən azı "+k+" oyun "+hb[1]+" aralığında olacaq, qalanı istənilən əmsalla."+(state.count%2?" Tək sayda oyunda yarısı yuxarı yuvarlaqlaşdırılır.":"");
+    } else hint.textContent=all?"Qarışıq: oyunların əmsalı istənilən aralıqdan ola bilər.":"Kupondakı hər oyunun əmsalı seçilmiş aralıqlardan olacaq.";
+  }
+  function renderMarkets(){
+    var box=$("marketChips"); box.innerHTML="";
+    var all=state.markets.size===MARKETS.length;
+    MARKETS.forEach(function(m){
+      box.appendChild(chip(m[1],!all&&state.markets.has(m[0]),function(){
+        if(all){state.markets=new Set([m[0]])}
+        else if(state.markets.has(m[0])){ if(state.markets.size>1) state.markets.delete(m[0]) }
+        else state.markets.add(m[0]);
+        changed();
+      }));
+    });
+    box.appendChild(chip("Qarışıq",all,function(){state.markets=new Set(MARKETS.map(function(m){return m[0]}));changed()}));
+    $("marketNote").hidden=!(state.markets.size===1&&state.markets.has("btts"));
+  }
+  function renderDays(){
+    var box=$("dayChips"); box.innerHTML="";
+    var both=state.days.size===2;
+    DAYS.forEach(function(d){box.appendChild(chip(d,!both&&state.days.has(d),function(){state.days=new Set([d]);changed()}))});
+    box.appendChild(chip("Qarışıq",both,function(){state.days=new Set(DAYS);changed()}));
+  }
+  function renderSpin(){
+    var ok=targetOk();
+    $("spinBtn").disabled=state.spinning||!ok;
+  }
+  function changed(){
+    var fix=normalizeTarget();
+    if(fix==="lo") toast("Əmsal bu filtrlərlə mümkün minimuma qaldırıldı: "+state.target.toFixed(2));
+    if(fix==="hi") toast("Əmsal bu filtrlərlə mümkün maksimuma endirildi: "+state.target.toFixed(2));
+    renderOdds();renderSports();renderLeagues();renderMarkets();renderBands();renderDays();renderMeta();drawWheel();renderSpin();
+  }
+
+  function setCount(n){
+    state.count=Math.min(8,Math.max(2,n)); $("count").textContent=state.count;
+    $("minus").disabled=state.count<=2; $("plus").disabled=state.count>=8;
+    changed();
+  }
+  $("minus").addEventListener("click",function(){setCount(state.count-1)});
+  $("plus").addEventListener("click",function(){setCount(state.count+1)});
+
+  $("addBtn").addEventListener("click",function(){
+    if(!state.coupon.length||$("addBtn").disabled) return;
+    var stake=parseFloat($("stake").value), tot=totalOf(state.coupon);
+    state.slip+=state.coupon.length; $("slipCount").textContent=state.slip;
+    toast("Kupon əlavə olundu: "+state.coupon.length+" oyun, əmsal "+tot.toFixed(2)+", mümkün udu "+money(stake*tot)+" AZN. Demo.");
+  });
+
+  var toastTimer;
+  function toast(t){var el=$("toast");el.textContent=t;el.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(function(){el.classList.remove("show")},2400)}
+
+  // ---------- popular strip ----------
+  (function(){
+    var box=$("popular");
+    events.filter(function(e){return e.league==="Premyer Liqa (İngiltərə)"&&e.day==="Bu gün"}).slice(0,5).forEach(function(e){
+      var row=document.createElement("div"); row.className="match";
+      row.innerHTML='<div style="min-width:0"><div class="tm"></div><div class="lg"></div></div>';
+      row.querySelector(".tm").textContent=e.home+" – "+e.away;
+      row.querySelector(".lg").textContent=e.league+" · "+e.time;
+      [["1",e.markets[0][1]],["X",e.markets[1][1]],["2",e.markets[2][1]]].forEach(function(c){
+        var d=document.createElement("div"); d.className="cell"; d.innerHTML="<small></small>";
+        d.querySelector("small").textContent=c[0]; d.appendChild(document.createTextNode(c[1].toFixed(2)));
+        row.appendChild(d);
+      });
+      box.appendChild(row);
+    });
+  })();
+
+  // ---------- boot ----------
+  setRotation(rotationToShow(0,0,0)-5*360,true);
+  setCount(4); renderCoupon("");
+  if(document.fonts&&document.fonts.ready) document.fonts.ready.then(drawWheel);
+  window.addEventListener("resize",drawWheel);})();
+</script>
+
+</body>
+</html>
