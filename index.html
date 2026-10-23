@@ -162,14 +162,14 @@ h1{font-family:var(--display);font-weight:800;font-style:italic;font-size:clamp(
         <div>
           <div class="eyebrow">Yeni · Kupon generatoru</div>
           <h1>Şanslı Əmsal</h1>
-          <p class="lede">Əmsalı və oyun sayını seçin, çarxı fırladın. Çarx idman növünü seçir, kupon həmin idman növünün oyunlarından yığılır.</p>
+          <p class="lede">Filtrləri seçin və çarxı fırladın. Kupon seçdiyiniz idman növlərinin oyunlarından, qarışıq şəkildə yığılır.</p>
         </div>
         <div class="wheel-wrap">
           <div class="pointer" aria-hidden="true"></div>
           <div class="wheel-rot" id="wheel"><canvas id="wheelCanvas" role="img" aria-label="İdman növləri çarxı"></canvas></div>
           <button class="hub" id="spinBtn" type="button">SPIN</button>
         </div>
-        <p class="wheel-note">Filtrlərə uyğun gəlməyən idman növləri çarxda solğun görünür və seçilmir.</p>
+        <p class="wheel-note">Çarx kuponun seçimlərinə təsir etmir; kupon yalnız filtrlərə görə yığılır.</p>
       </div>
 
       <div class="right">
@@ -188,7 +188,7 @@ h1{font-family:var(--display);font-weight:800;font-style:italic;font-size:clamp(
             <span class="hint" id="oddsHint"></span>
           </div>
           <div class="field wide">
-            <span class="label">Çarxdakı idman növləri</span>
+            <span class="label">İdman növü</span>
             <div class="chips" id="sportChips"></div>
           </div>
           <div class="field wide">
@@ -198,7 +198,14 @@ h1{font-family:var(--display);font-weight:800;font-style:italic;font-size:clamp(
           <div class="field wide">
             <span class="label">Market</span>
             <div class="chips" id="marketChips"></div>
-            <span class="hint" id="marketNote" hidden>“Hər iki komanda qol vurur” yalnız futbolda var, ona görə digər idman növləri çarxda solğun olur.</span>
+            <span class="hint" id="marketNote" hidden>“Hər iki komanda qol vurur” yalnız futbolda var, ona görə kupona yalnız futbol oyunları düşür.</span>
+          </div>
+          <div class="field wide">
+            <span class="label">Əmsal filtri</span>
+            <div class="chips" id="bandChips"></div>
+            <span class="hint">Qarışıq + aralıq: oyunların yarısı seçilmiş aralıqda, qalanı istənilən əmsalla.</span>
+            <div class="chips" id="halfChips"></div>
+            <span class="hint" id="bandHint"></span>
           </div>
           <div class="field wide">
             <span class="label">Vaxt</span>
@@ -260,7 +267,7 @@ h1{font-family:var(--display);font-weight:800;font-style:italic;font-size:clamp(
   var seeded=mulberry32(20261021);
   var r=function(a,b){return a+(b-a)*seeded()};
   var round2=function(x){return Math.round(x*100)/100};
-  var odd=function(p){return round2(1/(Math.min(p,.95)*1.06))};
+  var odd=function(p){return Math.max(1.01,round2(1/(Math.min(p,.95)*1.06)))};
   var half=function(a,b){return (Math.round(r(a,b))+.5)};
 
   // markets per sport: [label, odds, type]; type is one of result / total / btts
@@ -326,33 +333,52 @@ h1{font-family:var(--display);font-weight:800;font-style:italic;font-size:clamp(
   // ---------- state ----------
   var PRESETS=[3,5,10,20,50];
   var MARKETS=[["result","1X2 və İkili şans"],["total","Total (Üst/Alt)"],["btts","Hər iki komanda qol vurur"]];
-  var MIN_ODD=1.20, MAX_ODD=6.5, TOL=0.03;
+  var MAX_ODD=6.5, TOL=0.03;
+  // per-selection odds bands: [key, label, upper bound inclusive]
+  var BANDS=[["b1","x ≤ 1.20",1.20],["b2","1.20 – 1.50",1.50],["b3","1.50 – 2.00",2.00],["b4","2.00 – 3.00",3.00],["b5","x > 3.00",Infinity]];
+  function bandOf(x){for(var i=0;i<BANDS.length;i++){if(x<=BANDS[i][2]+1e-9)return BANDS[i][0]}return BANDS[BANDS.length-1][0]}
   // payout limit: stake × total odds may not exceed MAX_WIN; with the minimum stake that allows total odds up to MAX_WIN / MIN_STAKE
   var MAX_WIN=250000, MIN_STAKE=0.5, MAX_TOTAL=MAX_WIN/MIN_STAKE;
   function money(x){return x.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g," ")}
   var N=SPORTS.length, SEG=360/N;
   var state={count:4,target:10,manual:false,sports:new Set(SPORTS.map(function(s){return s.name})),leagues:new Set(),
-    markets:new Set(MARKETS.map(function(m){return m[0]})),days:new Set(DAYS),
+    markets:new Set(MARKETS.map(function(m){return m[0]})),bands:new Set(BANDS.map(function(b){return b[0]})),half:null,days:new Set(DAYS),
     current:null,coupon:[],rotation:0,spinning:false,spun:false,slip:0};
   var $=function(s){return document.getElementById(s)};
 
   function leaguesActive(){return state.sports.size<=2}
-  function usable(e){return e.markets.filter(function(m){return state.markets.has(m[2])&&m[1]>=MIN_ODD&&m[1]<=MAX_ODD})}
-  function poolFor(sport){
+  function usable(e){return e.markets.filter(function(m){return state.markets.has(m[2])&&state.bands.has(bandOf(m[1]))&&m[1]<=MAX_ODD})}
+  // the coupon is built from every sport chosen in the filter; the wheel is decoration only
+  function pool(){
     var useL=leaguesActive()&&state.leagues.size>0;
-    return events.filter(function(e){return e.sport===sport&&state.days.has(e.day)&&(!useL||state.leagues.has(e.league))&&usable(e).length});
+    return events.filter(function(e){return state.sports.has(e.sport)&&state.days.has(e.day)&&(!useL||state.leagues.has(e.league))&&usable(e).length});
   }
-  // real reachable range for one sport: product of the n lowest (or highest) odds from n different events
-  function range(sport,n){
-    var evs=poolFor(sport); if(evs.length<n) return null;
-    var lows=evs.map(function(e){return Math.min.apply(null,usable(e).map(function(m){return m[1]}))}).sort(function(a,b){return a-b});
-    var highs=evs.map(function(e){return Math.max.apply(null,usable(e).map(function(m){return m[1]}))}).sort(function(a,b){return b-a});
-    var lo=1,hi=1; for(var i=0;i<n;i++){lo*=lows[i];hi*=highs[i]}
-    return {lo:lo,hi:hi};
+  // real reachable range: product of the n lowest (or highest) odds from n different events in the pool
+  // "Qarışıq + aralıq" mode: at least half of the selections (rounded up) must come from the chosen band
+  function halfNeed(n){return state.half?Math.ceil(n/2):0}
+  function inHalf(odds){return bandOf(odds)===state.half}
+  function halfOdds(e){return usable(e).filter(function(m){return inHalf(m[1])}).map(function(m){return m[1]})}
+  function range(n){
+    var evs=pool(); if(evs.length<n) return null;
+    var k=halfNeed(n);
+    function side(isLow){
+      var pickF=isLow?Math.min:Math.max, cmp=isLow?function(a,b){return a.v-b.v}:function(a,b){return b.v-a.v};
+      var used=new Set(), prod=1;
+      if(k){
+        var hs=evs.filter(function(e){return halfOdds(e).length}).map(function(e){return {id:e.id,v:pickF.apply(null,halfOdds(e))}}).sort(cmp);
+        if(hs.length<k) return null;
+        for(var i=0;i<k;i++){prod*=hs[i].v;used.add(hs[i].id)}
+      }
+      var rest=evs.filter(function(e){return !used.has(e.id)}).map(function(e){return {v:pickF.apply(null,usable(e).map(function(m){return m[1]}))}}).sort(cmp);
+      if(rest.length<n-k) return null;
+      for(var j=0;j<n-k;j++) prod*=rest[j].v;
+      return prod;
+    }
+    var lo=side(true), hi=side(false);
+    return lo===null||hi===null?null:{lo:lo,hi:hi};
   }
-  function ranges(n){return SPORTS.map(function(S){return state.sports.has(S.name)?range(S.name,n):null}).filter(Boolean)}
-  function minOdds(n){var rs=ranges(n);if(!rs.length)return null;return Math.ceil(Math.min.apply(null,rs.map(function(x){return x.lo}))*100)/100}
-  function maxOdds(n){var rs=ranges(n);if(!rs.length)return null;return Math.min(MAX_TOTAL,Math.floor(Math.max.apply(null,rs.map(function(x){return x.hi}))*100)/100)}
+  function minOdds(n){var rr=range(n);if(!rr)return null;return Math.ceil(rr.lo*100)/100}
+  function maxOdds(n){var rr=range(n);if(!rr)return null;return Math.min(MAX_TOTAL,Math.floor(rr.hi*100)/100)}
   function targetOk(){var lo=minOdds(state.count),hi=maxOdds(state.count);return lo!==null&&state.target>=lo&&state.target<=hi}
   // keeps the target inside what is really possible with the current filters; never invents another value
   function normalizeTarget(){
@@ -362,11 +388,7 @@ h1{font-family:var(--display);font-weight:800;font-style:italic;font-size:clamp(
     if(state.target>hi){state.target=hi;state.manual=true;return "hi"}
     return "";
   }
-  function segmentOk(i){
-    var S=SPORTS[i]; if(!state.sports.has(S.name)) return false;
-    var rr=range(S.name,state.count);
-    return !!rr && state.target>=rr.lo-1e-9 && state.target<=rr.hi+1e-9;
-  }
+  function segmentOk(){return true}
   function shuffle(a){a=a.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t}return a}
   function pick(ev,m){return {ev:ev,market:m[0],odds:m[1]}}
   function totalOf(c){return c.reduce(function(p,x){return p*x.odds},1)}
@@ -377,11 +399,12 @@ h1{font-family:var(--display);font-weight:800;font-style:italic;font-size:clamp(
   // Returns only coupons that hit the target band. Attempt 0 is fully greedy, so near-minimum targets still resolve.
   function generate(target,n,evs){
     if(evs.length<n) return null;
+    var hk=halfNeed(n);
     for(var attempt=0;attempt<1500;attempt++){
       var used=new Set(), chosen=[], need=target, ok=true;
       for(var slot=0;slot<n;slot++){
-        var k=n-slot, cand=[];
-        evs.forEach(function(e){ if(!used.has(e.id)) usable(e).forEach(function(m){cand.push(pick(e,m))}) });
+        var k=n-slot, cand=[], must=slot<hk;   // the band-restricted slots come first, the last slot stays free
+        evs.forEach(function(e){ if(!used.has(e.id)) usable(e).forEach(function(m){ if(!must||inHalf(m[1])) cand.push(pick(e,m)) }) });
         if(!cand.length){ok=false;break}
         var choice;
         if(k===1){
@@ -396,7 +419,7 @@ h1{font-family:var(--display);font-weight:800;font-style:italic;font-size:clamp(
         }
         chosen.push(choice); used.add(choice.ev.id); need/=choice.odds;
       }
-      if(ok&&Math.abs(totalOf(chosen)-target)/target<=TOL) return shuffle(chosen);
+      if(ok&&Math.abs(totalOf(chosen)-target)/target<=TOL&&chosen.filter(function(c){return !hk||inHalf(c.odds)}).length>=hk) return shuffle(chosen);
     }
     return null;
   }
@@ -413,14 +436,20 @@ h1{font-family:var(--display);font-weight:800;font-style:italic;font-size:clamp(
   var ICON_X='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
 
   function renderMeta(){
-    $("targetText").textContent="Hədəf: "+fmt(state.target)+" · "+(state.coupon.length||state.count)+" oyun";
-    $("sportName").textContent="İdman: "+(state.current?state.current.name:"—");
+    var t="Hədəf: "+fmt(state.target)+" · "+(state.coupon.length||state.count)+" oyun";
+    if(state.half&&state.coupon.length){
+      var hb=BANDS.filter(function(b){return b[0]===state.half})[0];
+      t+=" · "+hb[1]+": "+state.coupon.filter(function(s){return inHalf(s.odds)}).length+"/"+state.coupon.length;
+    }
+    $("targetText").textContent=t;
+    var names=[]; state.coupon.forEach(function(s){if(names.indexOf(s.ev.sport)<0)names.push(s.ev.sport)});
+    $("sportName").textContent="İdman: "+(names.length?names.join(", "):"—");
   }
   function renderCoupon(msg){
     var rows=$("rows"); rows.innerHTML="";
     if(!state.coupon.length){
       var li=document.createElement("li"); li.className="empty";
-      if(!state.spun) li.innerHTML="Filtrləri seçin və çarxın ortasındakı <b>SPIN</b> düyməsini basın. Çarx idman növünü seçəcək, kupon burada yaranacaq.";
+      if(!state.spun) li.innerHTML="Filtrləri seçin və çarxın ortasındakı <b>SPIN</b> düyməsini basın. Kupon seçdiyiniz filtrlərə uyğun burada yaranacaq.";
       else li.textContent=msg?"Kupon yaradılmadı.":"Kupon boşdur. Yeni kupon üçün RESPIN basın.";
       rows.appendChild(li);
     }
@@ -474,8 +503,11 @@ h1{font-family:var(--display);font-weight:800;font-style:italic;font-size:clamp(
   function swap(i){
     var old=state.coupon[i], used=new Set(state.coupon.map(function(s){return s.ev.id}));
     var cur=totalOf(state.coupon), inBand=Math.abs(cur-state.target)/state.target<=TOL;
-    var evs=shuffle(poolFor(state.current.name).filter(function(e){return !used.has(e.id)})), cands=[], closest=null, cErr=Infinity;
+    var evs=shuffle(pool().filter(function(e){return !used.has(e.id)})), cands=[], closest=null, cErr=Infinity;
+    var othersIn=state.coupon.filter(function(s,j){return j!==i&&inHalf(s.odds)}).length;
+    var mustHalf=!!state.half&&othersIn<halfNeed(state.coupon.length);
     evs.forEach(function(e){usable(e).forEach(function(m){
+      if(mustHalf&&!inHalf(m[1])) return;
       var err=Math.abs(m[1]-old.odds)/old.odds;
       var keeps=inBand?Math.abs(cur/old.odds*m[1]-state.target)/state.target<=TOL:err<=0.06;
       if(keeps) cands.push(pick(e,m));
@@ -589,7 +621,7 @@ h1{font-family:var(--display);font-weight:800;font-style:italic;font-size:clamp(
       circle(ctx,R+Math.cos(ang)*(R-7),R+Math.sin(ang)*(R-7),2.6);
       ctx.fillStyle=d%2?"#C8F25A":"#EAF0F7"; ctx.fill();
     }
-    canvas.setAttribute("aria-label","İdman növləri çarxı: "+SPORTS.filter(function(S,i){return segmentOk(i)}).map(function(S){return S.name}).join(", "));
+    canvas.setAttribute("aria-label","Dekorativ çarx: "+SPORTS.map(function(S){return S.name}).join(", "));
   }
   function setRotation(deg,instant){
     if(instant) wheelEl.style.transition="none";
@@ -605,12 +637,8 @@ h1{font-family:var(--display);font-weight:800;font-style:italic;font-size:clamp(
   function spin(){
     if(state.spinning) return;
     if(!targetOk()){toast(state.count+" oyunla "+fmt(state.target)+" əmsal mümkün deyil. Oyun sayını və ya əmsalı dəyişin.");return}
-    // build the coupon first: the wheel only lands on a sport where an exact coupon really exists
-    var options=shuffle(SPORTS.map(function(S,i){return i}).filter(segmentOk)), idx=-1, coupon=null;
-    for(var o=0;o<options.length&&!coupon;o++){
-      coupon=generate(state.target,state.count,poolFor(SPORTS[options[o]].name));
-      if(coupon) idx=options[o];
-    }
+    // build the coupon from all filtered sports first; the wheel then stops on a random segment, purely for show
+    var coupon=generate(state.target,state.count,pool()), idx=Math.floor(Math.random()*N);
     if(!coupon){toast(fmt(state.target)+" əmsal üçün dəqiq kupon tapılmadı. Əmsalı bir az dəyişin.");return}
     var jitter=(Math.random()-.5)*SEG*0.6;
     state.spinning=true; $("spinBtn").disabled=true;
@@ -621,8 +649,8 @@ h1{font-family:var(--display);font-weight:800;font-style:italic;font-size:clamp(
       wheelEl.removeEventListener("transitionend",done); clearTimeout(fallback);
       state.spinning=false; state.spun=true;
       $("spinBtn").textContent="RESPIN"; renderSpin();
-      state.current=SPORTS[idx]; state.coupon=coupon; renderCoupon("");
-      toast("Çarx seçdi: "+SPORTS[idx].name);
+      state.coupon=coupon; renderCoupon("");
+      toast("Kupon hazırdır: "+state.count+" oyun, əmsal "+totalOf(coupon).toFixed(2));
     };
     fallback=setTimeout(done,3800);
     wheelEl.addEventListener("transitionend",done);
@@ -691,6 +719,31 @@ h1{font-family:var(--display);font-weight:800;font-style:italic;font-size:clamp(
       }));
     });
   }
+  function renderBands(){
+    var box=$("bandChips"); box.innerHTML="";
+    var all=state.bands.size===BANDS.length;
+    var everyBand=function(){return new Set(BANDS.map(function(b){return b[0]}))};
+    box.appendChild(chip("Qarışıq",all&&!state.half,function(){state.bands=everyBand();state.half=null;changed()}));
+    BANDS.forEach(function(b){
+      box.appendChild(chip(b[1],!all&&!state.half&&state.bands.has(b[0]),function(){
+        if(all||state.half){state.bands=new Set([b[0]])}
+        else if(state.bands.has(b[0])){ if(state.bands.size>1) state.bands.delete(b[0]) }
+        else state.bands.add(b[0]);
+        state.half=null; changed();
+      },false,"num"));
+    });
+    var hbox=$("halfChips"); hbox.innerHTML="";
+    BANDS.forEach(function(b){
+      hbox.appendChild(chip("Qarışıq + "+b[1],state.half===b[0],function(){
+        state.bands=everyBand(); state.half=state.half===b[0]?null:b[0]; changed();
+      },false,"num"));
+    });
+    var hint=$("bandHint");
+    if(state.half){
+      var hb=BANDS.filter(function(b){return b[0]===state.half})[0], k=halfNeed(state.count);
+      hint.textContent=state.count+" oyundan ən azı "+k+" oyun "+hb[1]+" aralığında olacaq, qalanı istənilən əmsalla."+(state.count%2?" Tək sayda oyunda yarısı yuxarı yuvarlaqlaşdırılır.":"");
+    } else hint.textContent=all?"Qarışıq: oyunların əmsalı istənilən aralıqdan ola bilər.":"Kupondakı hər oyunun əmsalı seçilmiş aralıqlardan olacaq.";
+  }
   function renderMarkets(){
     var box=$("marketChips"); box.innerHTML="";
     var all=state.markets.size===MARKETS.length;
@@ -712,14 +765,14 @@ h1{font-family:var(--display);font-weight:800;font-style:italic;font-size:clamp(
     box.appendChild(chip("Qarışıq",both,function(){state.days=new Set(DAYS);changed()}));
   }
   function renderSpin(){
-    var ok=targetOk()&&SPORTS.some(function(S,i){return segmentOk(i)});
+    var ok=targetOk();
     $("spinBtn").disabled=state.spinning||!ok;
   }
   function changed(){
     var fix=normalizeTarget();
     if(fix==="lo") toast("Əmsal bu filtrlərlə mümkün minimuma qaldırıldı: "+state.target.toFixed(2));
     if(fix==="hi") toast("Əmsal bu filtrlərlə mümkün maksimuma endirildi: "+state.target.toFixed(2));
-    renderOdds();renderSports();renderLeagues();renderMarkets();renderDays();renderMeta();drawWheel();renderSpin();
+    renderOdds();renderSports();renderLeagues();renderMarkets();renderBands();renderDays();renderMeta();drawWheel();renderSpin();
   }
 
   function setCount(n){
